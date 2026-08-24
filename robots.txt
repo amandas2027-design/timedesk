@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://timedesk.app/sitemap.xml
+Sitemap: https://timedesk.online/sitemap.xml
