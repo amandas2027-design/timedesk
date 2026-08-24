@@ -1155,6 +1155,27 @@
     document.fonts.ready.then(positionUnderline);
   }
 
+  /* ---------- keep the screen awake (Screen Wake Lock API) ---------- */
+  // Holds the display on while TimeDesk is the visible tab, so a phone or laptop
+  // doesn't dim and sleep mid-timer. Requires HTTPS (a secure context); on plain
+  // http it silently does nothing. The browser drops the lock whenever the page is
+  // hidden (tab switch / minimise), so we re-acquire it when the page is shown again.
+  var wakeLock = null;
+  function requestWakeLock(){
+    if (!('wakeLock' in navigator)) return;                 // unsupported browser
+    if (document.visibilityState !== 'visible') return;
+    if (wakeLock) return;                                    // already held
+    navigator.wakeLock.request('screen').then(function(sentinel){
+      wakeLock = sentinel;
+      wakeLock.addEventListener('release', function(){ wakeLock = null; });
+    }).catch(function(){ /* denied (not https / low battery / etc.) — ignore */ });
+  }
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible') requestWakeLock();
+  });
+  // Some browsers only grant the lock right after a user gesture — retry once on first tap.
+  document.addEventListener('click', function(){ requestWakeLock(); }, { once: true });
+
   /* ---------- init ---------- */
   applyTheme(loadTheme());
   updateFsIcon();
@@ -1164,6 +1185,7 @@
   updateTimerUI();
   setMode('clock');
   positionUnderline();
+  requestWakeLock();
   requestAnimationFrame(loop);
 })();
 </script>
