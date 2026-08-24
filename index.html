@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>TimeDesk — Clock · Stopwatch · Timer</title>
 <meta name="description" content="A quiet black-and-white clock, stopwatch and timer. Shows your local time by default.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23101010' stroke-width='1.5'/%3E%3Cline x1='16' y1='16' x2='16' y2='8.5' stroke='%23101010' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='16' y1='16' x2='21' y2='16' stroke='%23101010' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E">
@@ -38,6 +38,7 @@
 
   *{ box-sizing:border-box; }
 
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   html,body{ height:100%; }
 
   body{
@@ -51,6 +52,8 @@
     min-height:100dvh;
     -webkit-font-smoothing:antialiased;
     text-rendering:optimizeLegibility;
+    -webkit-tap-highlight-color:transparent;
+    overscroll-behavior-y:none;
   }
 
   /* ---------- Top bar ---------- */
@@ -59,6 +62,8 @@
     align-items:center;
     justify-content:space-between;
     padding:22px clamp(18px,5vw,44px);
+    padding-left:max(clamp(18px,5vw,44px), env(safe-area-inset-left));
+    padding-right:max(clamp(18px,5vw,44px), env(safe-area-inset-right));
     border-bottom:1px solid var(--hair);
   }
   .wordmark{
@@ -129,7 +134,14 @@
     line-height:0.9;
     padding:0.04em 0.12em;
     border-radius:3px;
+    -webkit-user-select:none; user-select:none;
+    transition:transform .12s ease;
   }
+  .time-display.is-tappable{
+    cursor:pointer;
+    touch-action:manipulation;
+  }
+  .time-display.is-tappable:active{ transform:scale(.985); }
   .digits{
     font-family:var(--display);
     font-weight:500;
@@ -325,7 +337,7 @@
 
   /* ---------- Footer ---------- */
   .footnote{
-    padding:18px 20px 24px;
+    padding:18px 20px max(24px, env(safe-area-inset-bottom));
     text-align:center;
     font-family:var(--mono);
     font-size:10.5px;
@@ -357,10 +369,30 @@
   body.focus .stage{ padding-top:0; padding-bottom:0; }
   body.focus .digits{ font-size:clamp(4rem,23vw,18rem); }
 
+  /* larger hit areas on touch devices */
+  @media (pointer:coarse){
+    .icon-btn{ width:40px; height:38px; }
+    .fmt-btn{ padding:8px 5px; }
+    .stepper{ width:48px; height:42px; font-size:19px; }
+    .preset{ padding:11px 15px; }
+    .sound-toggle{ padding:10px 8px; }
+  }
+
   @media (max-width:520px){
     .topbar{ padding:16px 18px; }
-    .wordmark{ font-size:12px; letter-spacing:0.28em; }
-    .btn{ padding:11px 16px; }
+    .topbar-actions{ gap:12px; }
+    .wordmark{ font-size:12px; letter-spacing:0.24em; }
+    .btn{ padding:12px 16px; }
+    .stage{ gap:clamp(22px,4vh,40px); padding:28px 16px; }
+    .tabs{ gap:22px; }
+    .tab{ letter-spacing:0.16em; }
+    .ctl-row{ gap:10px; }
+    .setter{ gap:clamp(12px,4vw,26px); }
+  }
+
+  @media (max-width:360px){
+    .tabs{ gap:15px; }
+    .tab{ font-size:11px; letter-spacing:0.11em; }
   }
 
   @media (prefers-reduced-motion: reduce){
@@ -704,6 +736,16 @@
       tState === 'done'    ? 'Done' : 'Start';
   }
 
+  /* ---------- primary toggle (shared by Space + tapping the number) ---------- */
+  function primaryToggle(){
+    if (mode === 'stopwatch'){
+      swToggle();
+    } else if (mode === 'timer'){
+      if (tState === 'done') timerDoReset();   // tap/Space dismisses the alarm
+      else timerPrimaryAction();
+    }
+  }
+
   /* ---------- audio ---------- */
   var audioCtx = null;
   function primeAudio(){
@@ -802,9 +844,9 @@
 
   function updateFootnote(){
     if (mode === 'clock') footnote.textContent = 'Your local time  ·  F fullscreen';
-    else if (mode === 'stopwatch') footnote.textContent = 'Space start·stop  /  L lap  /  R reset  /  F fullscreen';
-    else if (tState === 'done') footnote.textContent = "Time's up  ·  R reset";
-    else footnote.textContent = 'Space start·pause  /  R reset  /  F fullscreen';
+    else if (mode === 'stopwatch') footnote.textContent = 'Tap the number or Space to start · stop  ·  L lap  ·  R reset';
+    else if (tState === 'done') footnote.textContent = "Time's up  ·  tap the number or R to reset";
+    else footnote.textContent = 'Tap the number or Space to start · pause  ·  R reset';
   }
 
   function setMode(m){
@@ -824,6 +866,12 @@
     timerControls.hidden = m !== 'timer';
     lapsEl.hidden = !(m === 'stopwatch' && laps.length > 0);
     formatToggle.hidden = m !== 'clock';
+
+    // make the big number itself a start/stop control in stopwatch + timer
+    var tappable = (m === 'stopwatch' || m === 'timer');
+    displayEl.classList.toggle('is-tappable', tappable);
+    if (tappable) displayEl.setAttribute('title', 'Tap to start / stop');
+    else displayEl.removeAttribute('title');
 
     if (m === 'timer') clearAlert();
     updateFootnote();
@@ -916,12 +964,21 @@
   function toggleFocus(){ applyFocus(!focusMode); }
 
   document.addEventListener('mousemove', nudgeChrome);
-  document.addEventListener('touchstart', nudgeChrome, { passive: true });
+  document.addEventListener('touchstart', function(e){
+    // In focus mode, tapping the number should toggle start/stop without flashing the chrome.
+    if (focusMode && e.target && e.target.closest && e.target.closest('#display')) return;
+    nudgeChrome();
+  }, { passive: true });
 
   /* ---------- events ---------- */
   tabsEl.addEventListener('click', function(e){
     var t = e.target.closest('.tab');
     if (t) setMode(t.dataset.mode);
+  });
+
+  // tap the big number to start/stop (mobile-friendly; also works in focus mode)
+  displayEl.addEventListener('click', function(){
+    primaryToggle();
   });
 
   // format toggle
@@ -981,8 +1038,7 @@
         if (onButton && document.activeElement && document.activeElement.blur){
           document.activeElement.blur();
         }
-        if (mode === 'stopwatch') swToggle();
-        else if (tState !== 'done') timerPrimaryAction();
+        primaryToggle();
       } else if (focusMode){
         e.preventDefault();
       }
