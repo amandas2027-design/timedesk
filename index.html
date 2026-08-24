@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TimeDesk — Clock · Stopwatch · Timer</title>
+<meta name="description" content="A quiet black-and-white clock, stopwatch and timer. Shows your local time by default.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23101010' stroke-width='1.5'/%3E%3Cline x1='16' y1='16' x2='16' y2='8.5' stroke='%23101010' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='16' y1='16' x2='21' y2='16' stroke='%23101010' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@100..900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme: light;
+    --paper:#ffffff;
+    --ink:#101010;
+    --muted:#9a9a9a;
+    --muted-strong:#5f5f5f;
+    --hair:#e6e6e6;
+    --tick:#d8d8d8;
+    --tick-major:#a9a9a9;
+    --faint:#f5f5f5;
+    --display: 'Archivo', system-ui, sans-serif;
+    --mono: 'Space Mono', ui-monospace, monospace;
+  }
+
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --paper:#0d0d0d;
+    --ink:#f2f2f2;
+    --muted:#6b6b6b;
+    --muted-strong:#a6a6a6;
+    --hair:#2a2a2a;
+    --tick:#333333;
+    --tick-major:#565656;
+    --faint:#1a1a1a;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{ height:100%; }
+
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    transition:background .3s ease, color .3s ease;
+    font-family:var(--display);
+    display:flex;
+    flex-direction:column;
+    min-height:100dvh;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:22px clamp(18px,5vw,44px);
+    border-bottom:1px solid var(--hair);
+  }
+  .wordmark{
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:13px;
+    letter-spacing:0.34em;
+    text-transform:uppercase;
+    padding-left:0.34em;
+  }
+  .wordmark-dot{ color:var(--muted); }
+
+  .format-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-family:var(--mono);
+    font-size:12px;
+  }
+  .fmt-btn{
+    background:none;
+    border:none;
+    padding:2px 2px;
+    font:inherit;
+    letter-spacing:0.12em;
+    color:var(--muted);
+    cursor:pointer;
+    transition:color .18s ease;
+  }
+  .fmt-btn.is-active{ color:var(--ink); }
+  .fmt-btn:hover{ color:var(--ink); }
+  .fmt-sep{ color:var(--hair); }
+
+  .topbar-actions{ display:flex; align-items:center; gap:16px; }
+  .icon-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:28px; padding:0;
+    background:none; border:none; color:var(--muted-strong); cursor:pointer;
+    transition:color .18s ease;
+  }
+  .icon-btn:hover{ color:var(--ink); }
+  .icon-btn svg{ display:block; }
+
+  /* ---------- Stage ---------- */
+  .stage{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:clamp(26px,4.5vh,52px);
+    padding:40px 20px;
+    text-align:center;
+  }
+
+  /* ---------- Time display ---------- */
+  .display-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+    animation:rise .7s cubic-bezier(.2,.7,.2,1) both;
+  }
+  .time-display{
+    display:inline-flex;
+    align-items:flex-start;
+    justify-content:center;
+    line-height:0.9;
+    padding:0.04em 0.12em;
+    border-radius:3px;
+  }
+  .digits{
+    font-family:var(--display);
+    font-weight:500;
+    font-size:clamp(3.4rem,16vw,11.5rem);
+    letter-spacing:-0.02em;
+    font-variant-numeric:tabular-nums;
+    font-feature-settings:"tnum" 1;
+  }
+  .ampm{
+    font-family:var(--mono);
+    font-weight:700;
+    font-size:clamp(0.7rem,2.1vw,1.35rem);
+    letter-spacing:0.14em;
+    color:var(--muted-strong);
+    margin-left:0.5em;
+    margin-top:0.4em;
+    text-transform:uppercase;
+  }
+  .ampm.is-frac{
+    align-self:flex-end;
+    margin-top:0;
+    margin-bottom:0.28em;
+    color:var(--muted);
+  }
+  .ampm[hidden]{ display:none; }
+
+  /* alarm state */
+  .time-display.is-alarm{ animation:alarmPulse .8s ease-in-out infinite; }
+  @keyframes alarmPulse{
+    0%,100%{ background:transparent; color:var(--ink); }
+    50%{ background:var(--ink); color:var(--paper); }
+  }
+
+  /* ---------- Signature ruler (unrolled bezel) ---------- */
+  .ruler{
+    position:relative;
+    width:min(620px,86vw);
+    height:44px;
+    animation:rise .7s .06s cubic-bezier(.2,.7,.2,1) both;
+  }
+  .ruler-base{
+    position:absolute; left:0; right:0; top:50%;
+    height:1px; background:var(--hair); transform:translateY(-50%);
+  }
+  .ruler-fill{
+    position:absolute; left:0; top:50%;
+    height:2px; width:0; background:var(--ink); transform:translateY(-50%);
+    will-change:width;
+  }
+  .ruler-ticks{
+    position:absolute; inset:0;
+    display:flex; justify-content:space-between; align-items:center;
+    pointer-events:none;
+  }
+  .tick{ width:1px; height:8px; background:var(--tick); }
+  .tick.is-major{ height:15px; background:var(--tick-major); }
+  .ruler-marker{
+    position:absolute; top:50%; left:0;
+    width:2px; height:28px; background:var(--ink);
+    transform:translate(-50%,-50%);
+    will-change:left;
+  }
+  .ruler-marker::after{
+    content:''; position:absolute; top:-7px; left:50%;
+    width:6px; height:6px; background:var(--ink);
+    transform:translateX(-50%) rotate(45deg);
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabs{
+    position:relative;
+    display:flex;
+    gap:clamp(20px,5vw,52px);
+    padding-bottom:12px;
+  }
+  .tab{
+    background:none; border:none; cursor:pointer;
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.28em;
+    text-transform:uppercase;
+    color:var(--muted);
+    padding:4px 2px;
+    transition:color .2s ease;
+    position:relative;
+  }
+  .tab:hover{ color:var(--muted-strong); }
+  .tab.is-active{ color:var(--ink); }
+  .tab.is-alert{ color:var(--ink); animation:tabBlink 1s steps(1) infinite; }
+  @keyframes tabBlink{ 50%{ opacity:.25; } }
+  .tab-underline{
+    position:absolute; bottom:0; left:0; height:1.5px;
+    background:var(--ink);
+    width:0; transform:translateX(0);
+    transition:transform .34s cubic-bezier(.2,.7,.2,1), width .34s cubic-bezier(.2,.7,.2,1);
+  }
+
+  /* ---------- Controls ---------- */
+  .controls{
+    min-height:46px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  [hidden]{ display:none !important; }
+
+  .btn{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--ink);
+    background:var(--paper);
+    border:1px solid var(--ink);
+    padding:12px 22px;
+    cursor:pointer;
+    transition:background .18s ease, color .18s ease, opacity .18s ease;
+  }
+  .btn:hover{ background:var(--ink); color:var(--paper); }
+  .btn:disabled{ opacity:.3; cursor:default; }
+  .btn:disabled:hover{ background:var(--paper); color:var(--ink); }
+  .btn.is-ghost{ border-color:var(--hair); color:var(--muted-strong); }
+  .btn.is-ghost:hover{ border-color:var(--ink); background:var(--ink); color:var(--paper); }
+
+  .ctl-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:center; }
+
+  .clock-note{
+    font-family:var(--mono);
+    font-size:11px;
+    letter-spacing:0.22em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+
+  /* Timer setter */
+  .timer-panel{ display:flex; flex-direction:column; align-items:center; gap:20px; }
+  .setter{ display:flex; align-items:center; gap:clamp(10px,3vw,26px); }
+  .setter-group{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .setter-label{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.2em;
+    text-transform:uppercase; color:var(--muted); order:2;
+  }
+  .stepper{
+    width:34px; height:26px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--paper); border:1px solid var(--hair);
+    color:var(--ink); cursor:pointer; font-size:15px; line-height:1;
+    font-family:var(--display); font-weight:300;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .stepper:hover{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .stepper.step-up{ order:1; }
+  .stepper.step-down{ order:3; }
+
+  .presets{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .preset{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.1em;
+    background:none; border:1px solid var(--hair); color:var(--muted-strong);
+    padding:7px 12px; cursor:pointer;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .preset:hover{ border-color:var(--ink); color:var(--ink); }
+
+  .sound-toggle{
+    font-family:var(--mono); font-size:10px; letter-spacing:0.18em;
+    text-transform:uppercase; color:var(--muted);
+    background:none; border:none; cursor:pointer; padding:6px;
+  }
+  .sound-toggle:hover{ color:var(--ink); }
+  .sound-toggle .dot{ color:var(--ink); }
+
+  /* Laps */
+  .laps{
+    width:min(420px,86vw);
+    max-height:132px;
+    overflow-y:auto;
+    border-top:1px solid var(--hair);
+    margin-top:2px;
+  }
+  .lap-row{
+    display:grid;
+    grid-template-columns:1fr auto auto;
+    gap:16px;
+    align-items:baseline;
+    padding:9px 2px;
+    border-bottom:1px solid var(--faint);
+    font-family:var(--mono);
+    font-size:12px;
+  }
+  .lap-n{ color:var(--muted); letter-spacing:0.14em; text-align:left; }
+  .lap-delta{ color:var(--muted-strong); font-variant-numeric:tabular-nums; }
+  .lap-total{ color:var(--ink); font-variant-numeric:tabular-nums; }
+
+  /* ---------- Footer ---------- */
+  .footnote{
+    padding:18px 20px 24px;
+    text-align:center;
+    font-family:var(--mono);
+    font-size:10.5px;
+    letter-spacing:0.2em;
+    text-transform:uppercase;
+    color:var(--muted);
+  }
+
+  @keyframes rise{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:none; } }
+
+  /* focus visibility */
+  :focus-visible{ outline:2px solid var(--ink); outline-offset:3px; }
+
+  /* focus (zen) mode — show only the number */
+  body.focus .tabs,
+  body.focus .controls,
+  body.focus .laps,
+  body.focus .ruler,
+  body.focus .footnote{ display:none !important; }
+  body.focus .wordmark,
+  body.focus #formatToggle{ visibility:hidden; }
+  body.focus .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:5;
+    border-bottom:none; background:transparent;
+    opacity:0; pointer-events:none;
+    transition:opacity .35s ease;
+  }
+  body.focus.chrome-visible .topbar{ opacity:1; pointer-events:auto; }
+  body.focus .stage{ padding-top:0; padding-bottom:0; }
+  body.focus .digits{ font-size:clamp(4rem,23vw,18rem); }
+
+  @media (max-width:520px){
+    .topbar{ padding:16px 18px; }
+    .wordmark{ font-size:12px; letter-spacing:0.28em; }
+    .btn{ padding:11px 16px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+    .time-display.is-alarm{ animation:none; outline:2px solid var(--ink); }
+    .tab.is-alert{ animation:none; text-decoration:underline; }
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wordmark">TimeDesk</div>
+    <div class="topbar-actions">
+      <div class="format-toggle" id="formatToggle" role="group" aria-label="Time format">
+        <button class="fmt-btn is-active" data-fmt="12" aria-pressed="true">12</button>
+        <span class="fmt-sep" aria-hidden="true">/</span>
+        <button class="fmt-btn" data-fmt="24" aria-pressed="false">24</button>
+      </div>
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Switch to dark theme" title="Dark theme"></button>
+      <button class="icon-btn" id="fsToggle" type="button" aria-label="Enter fullscreen" title="Fullscreen"></button>
+      <button class="icon-btn" id="focusToggle" type="button" aria-label="Focus mode — show only the time" title="Focus mode"></button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="display-wrap">
+      <div class="time-display" id="display" role="timer" aria-live="off">
+        <span class="digits" id="digits">12:00:00</span><span class="ampm" id="ampm">AM</span>
+      </div>
+    </div>
+
+    <div class="ruler" aria-hidden="true">
+      <div class="ruler-base"></div>
+      <div class="ruler-fill" id="rulerFill"></div>
+      <div class="ruler-ticks" id="rulerTicks"></div>
+      <div class="ruler-marker" id="rulerMarker"></div>
+    </div>
+
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Modes">
+      <button class="tab is-active" data-mode="clock" role="tab" aria-selected="true">Clock</button>
+      <button class="tab" data-mode="stopwatch" role="tab" aria-selected="false" tabindex="-1">Stopwatch</button>
+      <button class="tab" data-mode="timer" role="tab" aria-selected="false" tabindex="-1">Timer</button>
+      <span class="tab-underline" id="tabUnderline" aria-hidden="true"></span>
+    </nav>
+
+    <div class="controls">
+      <!-- Clock -->
+      <div id="clockControls">
+        <span class="clock-note" id="clockNote">Your local time</span>
+      </div>
+
+      <!-- Stopwatch -->
+      <div id="swControls" hidden>
+        <div class="ctl-row">
+          <button class="btn" id="swPrimary">Start</button>
+          <button class="btn is-ghost" id="swLap">Lap</button>
+          <button class="btn is-ghost" id="swReset">Reset</button>
+        </div>
+      </div>
+
+      <!-- Timer -->
+      <div id="timerControls" hidden>
+        <div class="timer-panel">
+          <div class="setter" id="timerSet">
+            <div class="setter-group">
+              <button class="stepper step-up" data-unit="h" data-dir="1" aria-label="Increase hours">+</button>
+              <span class="setter-label">Hrs</span>
+              <button class="stepper step-down" data-unit="h" data-dir="-1" aria-label="Decrease hours">−</button>
+            </div>
+            <div class="setter-group">
+              <button class="stepper step-up" data-unit="m" data-dir="1" aria-label="Increase minutes">+</button>
+              <span class="setter-label">Min</span>
+              <button class="stepper step-down" data-unit="m" data-dir="-1" aria-label="Decrease minutes">−</button>
+            </div>
+            <div class="setter-group">
+              <button class="stepper step-up" data-unit="s" data-dir="1" aria-label="Increase seconds">+</button>
+              <span class="setter-label">Sec</span>
+              <button class="stepper step-down" data-unit="s" data-dir="-1" aria-label="Decrease seconds">−</button>
+            </div>
+          </div>
+          <div class="presets" id="timerPresets">
+            <button class="preset" data-sec="60">1:00</button>
+            <button class="preset" data-sec="300">5:00</button>
+            <button class="preset" data-sec="600">10:00</button>
+            <button class="preset" data-sec="1500">25:00</button>
+          </div>
+          <div class="ctl-row">
+            <button class="btn" id="timerPrimary">Start</button>
+            <button class="btn is-ghost" id="timerReset" hidden>Reset</button>
+            <button class="sound-toggle" id="soundToggle" aria-pressed="true">Sound <span class="dot">On</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="laps" id="laps" hidden aria-label="Lap times"></div>
+  </main>
+
+  <footer class="footnote" id="footnote">Your local time</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- element refs ---------- */
+  var $ = function(id){ return document.getElementById(id); };
+  var digitsEl = $('digits');
+  var ampmEl   = $('ampm');
+  var displayEl= $('display');
+  var fillEl   = $('rulerFill');
+  var markerEl = $('rulerMarker');
+  var ticksEl  = $('rulerTicks');
+  var tabsEl   = $('tabs');
+  var underline= $('tabUnderline');
+  var footnote = $('footnote');
+  var formatToggle = $('formatToggle');
+  var themeToggle = $('themeToggle');
+  var fsToggle = $('fsToggle');
+  var focusToggle = $('focusToggle');
+
+  var clockControls = $('clockControls');
+  var swControls    = $('swControls');
+  var timerControls = $('timerControls');
+  var lapsEl        = $('laps');
+
+  var swPrimary = $('swPrimary');
+  var swLap     = $('swLap');
+  var swReset   = $('swReset');
+
+  var timerSet     = $('timerSet');
+  var timerPresets = $('timerPresets');
+  var timerPrimary = $('timerPrimary');
+  var timerReset   = $('timerReset');
+  var soundToggle  = $('soundToggle');
+
+  /* ---------- state ---------- */
+  var mode = 'clock';           // 'clock' | 'stopwatch' | 'timer'
+  var format = 12;              // 12 | 24
+  var soundOn = true;
+
+  // stopwatch
+  var swRunning = false, swStart = 0, swAccum = 0, laps = [];
+
+  // timer
+  var tState = 'idle';          // 'idle' | 'running' | 'paused' | 'done'
+  var setH = 0, setM = 5, setS = 0;
+  var tDuration = 0;            // ms
+  var tEnd = 0;                 // epoch ms when running
+  var tRemaining = 0;           // ms held while paused/idle
+
+  /* ---------- helpers ---------- */
+  function pad(n, len){ len = len || 2; return String(n).padStart(len, '0'); }
+  function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
+
+  function fmtClock(d){
+    var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
+    var ap = '';
+    if (format === 12){
+      ap = h >= 12 ? 'PM' : 'AM';
+      h = h % 12; if (h === 0) h = 12;
+      return { main: h + ':' + pad(m) + ':' + pad(s), ap: ap };
+    }
+    return { main: pad(h) + ':' + pad(m) + ':' + pad(s), ap: '' };
+  }
+
+  // stopwatch: M:SS.cc, or H:MM:SS.cc past an hour
+  function fmtSW(ms){
+    if (ms < 0) ms = 0;
+    var totalSec = Math.floor(ms / 1000);
+    var cc = Math.floor((ms % 1000) / 10);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    var base = h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (m + ':' + pad(s));
+    return { main: base, cc: pad(cc) };
+  }
+
+  // timer / duration: MM:SS, or H:MM:SS past an hour
+  function fmtDur(ms){
+    if (ms < 0) ms = 0;
+    var totalSec = Math.ceil(ms / 1000);
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    return h > 0 ? (h + ':' + pad(m) + ':' + pad(s)) : (pad(m) + ':' + pad(s));
+  }
+
+  function setRuler(frac){
+    frac = clamp(frac, 0, 1);
+    var pct = (frac * 100) + '%';
+    fillEl.style.width = pct;
+    markerEl.style.left = pct;
+  }
+
+  /* ---------- build ruler ticks (unrolled 60s bezel) ---------- */
+  (function buildTicks(){
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i <= 60; i++){
+      var t = document.createElement('div');
+      t.className = 'tick' + (i % 5 === 0 ? ' is-major' : '');
+      frag.appendChild(t);
+    }
+    ticksEl.appendChild(frag);
+  })();
+
+  /* ---------- stopwatch ---------- */
+  function swElapsed(now){ return swAccum + (swRunning ? (now - swStart) : 0); }
+
+  function updateSwUI(){
+    swPrimary.textContent = swRunning ? 'Stop' : (swAccum > 0 ? 'Resume' : 'Start');
+    var hasTime = swRunning || swAccum > 0;
+    swReset.disabled = !hasTime && laps.length === 0;
+    swLap.disabled = !swRunning;
+  }
+
+  function swToggle(){
+    var now = Date.now();
+    if (swRunning){
+      swAccum += now - swStart;
+      swRunning = false;
+    } else {
+      swStart = now;
+      swRunning = true;
+    }
+    updateSwUI();
+  }
+
+  function swDoReset(){
+    swRunning = false; swAccum = 0; swStart = 0; laps = [];
+    renderLaps();
+    lapsEl.hidden = true;
+    updateSwUI();
+    renderNow();
+  }
+
+  function addLap(){
+    if (!swRunning) return;
+    var e = swElapsed(Date.now());
+    var prev = laps.length ? laps[laps.length - 1].total : 0;
+    laps.push({ n: laps.length + 1, total: e, delta: e - prev });
+    renderLaps();
+    lapsEl.hidden = false;
+  }
+
+  function renderLaps(){
+    lapsEl.innerHTML = '';
+    for (var i = laps.length - 1; i >= 0; i--){
+      var l = laps[i];
+      var row = document.createElement('div');
+      row.className = 'lap-row';
+      var d = fmtSW(l.delta), tot = fmtSW(l.total);
+      row.innerHTML =
+        '<span class="lap-n">Lap ' + pad(l.n) + '</span>' +
+        '<span class="lap-delta">+' + d.main + '.' + d.cc + '</span>' +
+        '<span class="lap-total">' + tot.main + '.' + tot.cc + '</span>';
+      lapsEl.appendChild(row);
+    }
+  }
+
+  /* ---------- timer ---------- */
+  function recomputeDuration(){
+    tDuration = ((setH * 3600) + (setM * 60) + setS) * 1000;
+    if (tState === 'idle') tRemaining = tDuration;
+  }
+
+  function stepSet(unit, dir){
+    if (tState !== 'idle') return;
+    if (unit === 'h') setH = clamp(setH + dir, 0, 99);
+    if (unit === 'm') setM = clamp(setM + dir, 0, 59);
+    if (unit === 's') setS = clamp(setS + dir, 0, 59);
+    recomputeDuration();
+    renderNow();
+  }
+
+  function applyPreset(totalSec){
+    if (tState !== 'idle') return;
+    setH = Math.floor(totalSec / 3600);
+    setM = Math.floor((totalSec % 3600) / 60);
+    setS = totalSec % 60;
+    recomputeDuration();
+    renderNow();
+  }
+
+  function timerPrimaryAction(){
+    if (tState === 'idle'){
+      if (tDuration <= 0) return;
+      primeAudio();
+      tRemaining = tDuration;
+      tEnd = Date.now() + tRemaining;
+      tState = 'running';
+    } else if (tState === 'running'){
+      tRemaining = tEnd - Date.now();
+      tState = 'paused';
+    } else if (tState === 'paused'){
+      tEnd = Date.now() + tRemaining;
+      tState = 'running';
+    }
+    clearAlert();
+    updateTimerUI();
+    renderNow();
+  }
+
+  function timerDoReset(){
+    tState = 'idle';
+    recomputeDuration();
+    tRemaining = tDuration;
+    displayEl.classList.remove('is-alarm');
+    clearAlert();
+    updateTimerUI();
+    renderNow();
+  }
+
+  function onTimerDone(){
+    tState = 'done';
+    tRemaining = 0;
+    displayEl.classList.add('is-alarm');
+    beep(3);
+    if (mode !== 'timer'){
+      var tt = tabsEl.querySelector('.tab[data-mode="timer"]');
+      if (tt) tt.classList.add('is-alert');
+    }
+    updateTimerUI();
+    updateFootnote();
+  }
+
+  function clearAlert(){
+    displayEl.classList.remove('is-alarm');
+    var tt = tabsEl.querySelector('.tab[data-mode="timer"]');
+    if (tt) tt.classList.remove('is-alert');
+  }
+
+  function updateTimerUI(){
+    var idle = tState === 'idle';
+    timerSet.hidden = !idle;
+    timerPresets.hidden = !idle;
+    timerReset.hidden = idle;
+    timerPrimary.disabled = (tState === 'done') || (idle && tDuration <= 0);
+    timerPrimary.textContent =
+      tState === 'running' ? 'Pause' :
+      tState === 'paused'  ? 'Resume' :
+      tState === 'done'    ? 'Done' : 'Start';
+  }
+
+  /* ---------- audio ---------- */
+  var audioCtx = null;
+  function primeAudio(){
+    if (!soundOn) return;
+    try{
+      if (!audioCtx){
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }catch(e){}
+  }
+  function beep(times){
+    if (!soundOn || !audioCtx) return;
+    try{
+      var t0 = audioCtx.currentTime;
+      for (var i = 0; i < times; i++){
+        var osc = audioCtx.createOscillator();
+        var g = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = 660;
+        var start = t0 + i * 0.28;
+        g.gain.setValueAtTime(0.0001, start);
+        g.gain.exponentialRampToValueAtTime(0.32, start + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(start); osc.stop(start + 0.24);
+      }
+    }catch(e){}
+  }
+
+  /* ---------- rendering ---------- */
+  function showAmpm(text, isFrac){
+    ampmEl.textContent = text;
+    ampmEl.hidden = (text === '');
+    if (isFrac) ampmEl.classList.add('is-frac');
+    else ampmEl.classList.remove('is-frac');
+  }
+
+  function renderClock(now){
+    var d = new Date(now);
+    var out = fmtClock(d);
+    digitsEl.textContent = out.main;
+    showAmpm(out.ap, false);
+    var frac = (d.getSeconds() + d.getMilliseconds() / 1000) / 60;
+    setRuler(frac);
+  }
+
+  function renderStopwatch(now){
+    var e = swElapsed(now);
+    var out = fmtSW(e);
+    digitsEl.textContent = out.main;
+    showAmpm('.' + out.cc, true);
+    var frac = ((e / 1000) % 60) / 60;
+    setRuler(frac);
+  }
+
+  function renderTimer(now){
+    var remaining;
+    if (tState === 'running') remaining = tEnd - now;
+    else if (tState === 'paused') remaining = tRemaining;
+    else if (tState === 'done') remaining = 0;
+    else remaining = tDuration; // idle -> show the set duration
+    if (remaining < 0) remaining = 0;
+    digitsEl.textContent = fmtDur(remaining);
+    showAmpm('', false);
+    var frac = tDuration > 0 ? (1 - remaining / tDuration) : 0;
+    setRuler(frac);
+  }
+
+  function renderNow(){
+    var now = Date.now();
+    if (mode === 'clock') renderClock(now);
+    else if (mode === 'stopwatch') renderStopwatch(now);
+    else renderTimer(now);
+  }
+
+  /* ---------- main loop ---------- */
+  function loop(){
+    var now = Date.now();
+    // timer completion is checked regardless of active mode
+    if (tState === 'running' && (tEnd - now) <= 0){
+      onTimerDone();
+    }
+    renderNow();
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------- tabs / modes ---------- */
+  function positionUnderline(){
+    var active = tabsEl.querySelector('.tab.is-active');
+    if (!active) return;
+    underline.style.width = active.offsetWidth + 'px';
+    underline.style.transform = 'translateX(' + active.offsetLeft + 'px)';
+  }
+
+  function updateFootnote(){
+    if (mode === 'clock') footnote.textContent = 'Your local time  ·  F fullscreen';
+    else if (mode === 'stopwatch') footnote.textContent = 'Space start·stop  /  L lap  /  R reset  /  F fullscreen';
+    else if (tState === 'done') footnote.textContent = "Time's up  ·  R reset";
+    else footnote.textContent = 'Space start·pause  /  R reset  /  F fullscreen';
+  }
+
+  function setMode(m){
+    mode = m;
+    var tabList = tabsEl.querySelectorAll('.tab');
+    for (var i = 0; i < tabList.length; i++){
+      var t = tabList[i];
+      var on = t.dataset.mode === m;
+      t.classList.toggle('is-active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+    }
+    positionUnderline();
+
+    clockControls.hidden = m !== 'clock';
+    swControls.hidden    = m !== 'stopwatch';
+    timerControls.hidden = m !== 'timer';
+    lapsEl.hidden = !(m === 'stopwatch' && laps.length > 0);
+    formatToggle.hidden = m !== 'clock';
+
+    if (m === 'timer') clearAlert();
+    updateFootnote();
+    updateSwUI();
+    updateTimerUI();
+    renderNow();
+  }
+
+  /* ---------- theme ---------- */
+  var ICON = {
+    moon: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+    sun: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    expand: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M16 21h5v-5M8 21H3v-5"/></svg>',
+    compress: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v5H3M16 3v5h5M16 21v-5h5M8 21v-5H3"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 5.2A9.8 9.8 0 0 1 12 5c7 0 10.5 7 10.5 7a17.4 17.4 0 0 1-3.3 4.2M6.3 6.3A17 17 0 0 0 1.5 12S5 19 12 19a9.6 9.6 0 0 0 4.2-.9"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>'
+  };
+
+  function loadTheme(){
+    try{ var v = localStorage.getItem('timedesk-theme'); if (v) return v; }catch(e){}
+    try{ if (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) return 'dark'; }catch(e){}
+    return 'light';
+  }
+  function saveTheme(v){ try{ localStorage.setItem('timedesk-theme', v); }catch(e){} }
+
+  function applyTheme(theme){
+    document.documentElement.setAttribute('data-theme', theme);
+    var dark = theme === 'dark';
+    themeToggle.innerHTML = dark ? ICON.sun : ICON.moon;
+    themeToggle.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    themeToggle.title = dark ? 'Light theme' : 'Dark theme';
+  }
+  function toggleTheme(){
+    var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    saveTheme(next);
+  }
+
+  /* ---------- fullscreen ---------- */
+  function fsElement(){ return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function updateFsIcon(){
+    var on = !!fsElement();
+    fsToggle.innerHTML = on ? ICON.compress : ICON.expand;
+    fsToggle.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Enter fullscreen');
+    fsToggle.title = on ? 'Exit fullscreen' : 'Fullscreen';
+  }
+  function toggleFullscreen(){
+    try{
+      if (!fsElement()){
+        var el = document.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) req.call(el);
+      } else {
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document);
+      }
+    }catch(e){}
+  }
+
+  /* ---------- focus (zen) mode ---------- */
+  var focusMode = false;
+  var chromeTimer = null;
+
+  function nudgeChrome(){
+    if (!focusMode) return;
+    document.body.classList.add('chrome-visible');
+    if (chromeTimer) clearTimeout(chromeTimer);
+    chromeTimer = setTimeout(function(){
+      document.body.classList.remove('chrome-visible');
+    }, 2500);
+  }
+
+  function applyFocus(on){
+    focusMode = on;
+    document.body.classList.toggle('focus', on);
+    focusToggle.innerHTML = on ? ICON.eyeOff : ICON.eye;
+    focusToggle.setAttribute('aria-label', on ? 'Exit focus mode' : 'Focus mode — show only the time');
+    focusToggle.title = on ? 'Exit focus (Esc)' : 'Focus mode';
+    if (on){
+      nudgeChrome();
+      // Drop focus off the eye button so Space controls the module, not the button.
+      if (document.activeElement && typeof document.activeElement.blur === 'function'){
+        document.activeElement.blur();
+      }
+    } else {
+      document.body.classList.remove('chrome-visible');
+      if (chromeTimer) clearTimeout(chromeTimer);
+    }
+  }
+  function toggleFocus(){ applyFocus(!focusMode); }
+
+  document.addEventListener('mousemove', nudgeChrome);
+  document.addEventListener('touchstart', nudgeChrome, { passive: true });
+
+  /* ---------- events ---------- */
+  tabsEl.addEventListener('click', function(e){
+    var t = e.target.closest('.tab');
+    if (t) setMode(t.dataset.mode);
+  });
+
+  // format toggle
+  var fmtBtns = document.querySelectorAll('.fmt-btn');
+  Array.prototype.forEach.call(fmtBtns, function(b){
+    b.addEventListener('click', function(){
+      format = parseInt(b.dataset.fmt, 10);
+      Array.prototype.forEach.call(fmtBtns, function(x){
+        var on = x === b;
+        x.classList.toggle('is-active', on);
+        x.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      renderNow();
+    });
+  });
+
+  // theme + fullscreen + focus
+  themeToggle.addEventListener('click', toggleTheme);
+  fsToggle.addEventListener('click', toggleFullscreen);
+  focusToggle.addEventListener('click', toggleFocus);
+  document.addEventListener('fullscreenchange', updateFsIcon);
+  document.addEventListener('webkitfullscreenchange', updateFsIcon);
+
+  // stopwatch
+  swPrimary.addEventListener('click', swToggle);
+  swLap.addEventListener('click', addLap);
+  swReset.addEventListener('click', swDoReset);
+
+  // timer setter
+  timerSet.addEventListener('click', function(e){
+    var s = e.target.closest('.stepper');
+    if (s) stepSet(s.dataset.unit, parseInt(s.dataset.dir, 10));
+  });
+  timerPresets.addEventListener('click', function(e){
+    var p = e.target.closest('.preset');
+    if (p) applyPreset(parseInt(p.dataset.sec, 10));
+  });
+  timerPrimary.addEventListener('click', timerPrimaryAction);
+  timerReset.addEventListener('click', timerDoReset);
+  soundToggle.addEventListener('click', function(){
+    soundOn = !soundOn;
+    soundToggle.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    soundToggle.innerHTML = 'Sound <span class="dot">' + (soundOn ? 'On' : 'Off') + '</span>';
+    if (soundOn) primeAudio();
+  });
+
+  // keyboard shortcuts
+  document.addEventListener('keydown', function(e){
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var tag = (document.activeElement && document.activeElement.tagName) || '';
+    var onButton = tag === 'BUTTON';
+    if (e.code === 'Space'){
+      if (mode === 'stopwatch' || mode === 'timer'){
+        // Space is the global start/stop for these modes — never let a focused
+        // button (Start / Lap / Reset / eye / etc.) capture it.
+        e.preventDefault();
+        if (onButton && document.activeElement && document.activeElement.blur){
+          document.activeElement.blur();
+        }
+        if (mode === 'stopwatch') swToggle();
+        else if (tState !== 'done') timerPrimaryAction();
+      } else if (focusMode){
+        e.preventDefault();
+      }
+    } else if (e.key === 'l' || e.key === 'L'){
+      if (mode === 'stopwatch') addLap();
+    } else if (e.key === 'r' || e.key === 'R'){
+      if (mode === 'stopwatch') swDoReset();
+      else if (mode === 'timer') timerDoReset();
+    } else if (e.key === 'f' || e.key === 'F'){
+      toggleFullscreen();
+    } else if (e.key === 'h' || e.key === 'H'){
+      toggleFocus();
+    } else if (e.key === 'Escape'){
+      if (focusMode) applyFocus(false);
+    }
+  });
+
+  window.addEventListener('resize', positionUnderline);
+  if (document.fonts && document.fonts.ready){
+    document.fonts.ready.then(positionUnderline);
+  }
+
+  /* ---------- init ---------- */
+  applyTheme(loadTheme());
+  updateFsIcon();
+  applyFocus(false);
+  recomputeDuration();
+  updateSwUI();
+  updateTimerUI();
+  setMode('clock');
+  positionUnderline();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
